@@ -1,0 +1,64 @@
+# Recursos del juego original: NUNCA se suben (se generan con tools/extract_assets.py)
+assets_src/
+romfs/
+data/*.tpf2
+data/*.bin
+*.wbfs
+*.iso
+*.dol
+
+# Paquetes y claves de consola
+nsp/out/
+nsp/exefs/
+nsp/nca/
+nsp/tmp/
+nsp/backup/
+*.nsp
+*.nso
+*.nro
+*.npdm
+*.nacp
+*.elf
+*.keys
+prod.keys
+title.keys
+
+# Compilación
+build/
+*.o
+*.d
+*.map
+*.lst
+tetris-mac
+tools/hacbrewpack
+tools/bombliss_snap
+tools/climber_snap
+tools/drop_snap
+tools/game_snap
+tools/items_snap
+tools/lyt_view
+tools/menu_snap
+tools/mode_snap
+tools/pause_snap
+tools/seq2wav
+tools/shadow_snap
+tools/sim
+tools/test_rules
+tools/text_snap
+tools/title_snap
+tools/vs_snap
+tools/bombliss_test
+__pycache__/
+
+# Personal / generado en ejecución
+dedicatoria.txt
+records.bin
+settings.bin
+log.txt
+*.bmp
+*.wav
+.DS_Store
+nsp/control/icon_AmericanEnglish.dat
+*.orig
+# Salida cruda del decompilador (código del juego original): no se publica
+notes/*.c
