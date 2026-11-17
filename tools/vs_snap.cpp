@@ -1,7 +1,7 @@
-// Captura de una partida VS local (2-4 jugadores): vs_snap salida.bmp [jugadores=2] [frames=600] [frames de telop=300] [pozo=0|1]
+// Captura de una partida VS local (2-4 jugadores; 6 = Tetris VS 6, modo 27; 8 = Tetris VS 8, modo 28): vs_snap salida.bmp [jugadores=2] [frames=600] [frames de telop=300] [pozo=0|1]
 //   Se detiene al quedar un solo jugador vivo (entonces muestra el telop de fin tras [frames de telop]); pozo=1 prerrellena la fila inferior para provocar despejes.
 //   Entradas aleatorias por defecto. Variables de entorno (verificación de las reglas VS):
-//     VS_CPU=1111   máscara por jugador (J1..J4): 1 = lo juega la IA (game/vs_ai.hpp); VS_LEVEL=0..14 nivel de IA
+//     VS_CPU=1111   máscara por jugador (J1..J4; 6 dígitos con 6 jugadores): 1 = lo juega la IA (game/vs_ai.hpp); VS_LEVEL=0..14 nivel de IA
 //     VS_TEAMS=0,0,1,1   color de equipo por jugador; VS_HANDICAP=0,3,0,0   hándicap 0..5; VS_SLIP=1   Resbaladizo
 //     VS_GARBAGE=n[,jugador]   mete n líneas de basura pendientes (de un atacante ficticio) al jugador (def. J1) al empezar
 //     VS_IA=1   Tetris vs. IA (modo 1, VSIA): 2 jugadores, J1 aleatorio + IA (VS_LEVEL), marcos _03/_17, TextBox_comLV, telop win/lose; VS_RESULT=n sigue marcando el botón n
@@ -31,22 +31,24 @@ static std::vector<uint8_t> readFile(const std::string& p) { std::ifstream f(p, 
 int main(int argc, char** argv) {
     if (argc < 2) { fprintf(stderr, "uso: vs_snap salida.bmp [jugadores] [frames] [telop] [pozo]\n"); return 1; }
     SDL_Init(SDL_INIT_VIDEO);
-    SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormat(0, 640, 480, 32, SDL_PIXELFORMAT_RGBA32); SDL_Renderer* rn = SDL_CreateSoftwareRenderer(surf);
-    lyt::Renderer R(rn); R.screenW = 640; R.screenH = 480;
+    bool wide = getenv("VS_WIDE") != nullptr; int SW = wide ? 853 : 640;  // VS_WIDE=1: pantalla 16:9 (como la Switch en el modo VS 6)
+    SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormat(0, SW, 480, 32, SDL_PIXELFORMAT_RGBA32); SDL_Renderer* rn = SDL_CreateSoftwareRenderer(surf);
+    lyt::Renderer R(rn); R.screenW = (float)SW; R.screenH = 480; R.baseW = wide ? 480.0f * SW / 480 : 640;
     for (const char* f : {"tetrisfont00.brfna", "tetrisfont01.brfna", "tetrisfont02.brfna"}) { auto d = readFile(std::string("assets_src/") + f); R.loadFont(f, d.data(), d.size()); }
     bool vsIa = getenv("VS_IA") && atoi(getenv("VS_IA"));  // VSIA
-    int n = vsIa ? 2 : argc > 2 ? atoi(argv[2]) : 2; if (n < 2) n = 2; if (n > 4) n = 4; int frames = argc > 3 ? atoi(argv[3]) : 600; int telopFrames = argc > 4 ? atoi(argv[4]) : 300; bool well = argc > 5 && atoi(argv[5]);
+    int n = vsIa ? 2 : argc > 2 ? atoi(argv[2]) : 2; if (n < 2) n = 2; if (n > 4) n = n >= 7 ? 8 : 6; int frames = argc > 3 ? atoi(argv[3]) : 600; int telopFrames = argc > 4 ? atoi(argv[4]) : 300; bool well = argc > 5 && atoi(argv[5]);
     view::GameRes res; if (!res.load(&R, "assets_src/")) { fprintf(stderr, "recursos\n"); return 1; }
     auto buf = readFile("data/8044aa58.tpf2"); tpf::Rules rules = tpf::parse(buf.data(), buf.size());
     game::VersusState vs; std::vector<std::unique_ptr<SnapPlayer>> PL; std::vector<game::PlayerBase*> base;
-    game::VsConfig cfg; for (int i = 0; i < 4; i++) cfg.type[i] = i < n ? game::VT_HUMAN : game::VT_OFF;
+    game::VsConfig cfg; for (int i = 0; i < game::MAX_PLAYERS; i++) cfg.type[i] = i < n ? game::VT_HUMAN : game::VT_OFF;
     auto envList = [&](const char* name, int* out, int cnt) { const char* e = getenv(name); if (!e) return; for (int i = 0; i < cnt && *e; i++) { out[i] = atoi(e); while (*e && *e != ',') e++; if (*e == ',') e++; } };
-    envList("VS_TEAMS", cfg.team, 4); envList("VS_HANDICAP", cfg.handicap, 4); cfg.slippery = getenv("VS_SLIP") && atoi(getenv("VS_SLIP")); if (getenv("VS_LEVEL")) cfg.aiLevel = atoi(getenv("VS_LEVEL"));
+    envList("VS_TEAMS", cfg.team, 8); envList("VS_HANDICAP", cfg.handicap, 8); cfg.slippery = getenv("VS_SLIP") && atoi(getenv("VS_SLIP")); if (getenv("VS_LEVEL")) cfg.aiLevel = atoi(getenv("VS_LEVEL"));
     if (vsIa) { cfg.type[0] = game::VT_HUMAN; cfg.type[1] = game::VT_CPU; cfg.team[0] = 0; cfg.team[1] = 1; }
     const char* cpuMask = getenv("VS_CPU"); if (cpuMask) for (int i = 0; i < n && cpuMask[i]; i++) if (cpuMask[i] == '1') cfg.type[i] = game::VT_CPU;
     bool verbose = getenv("VS_VERBOSE") && atoi(getenv("VS_VERBOSE"));
     for (int i = 0; i < n; i++) {
-        auto p = std::make_unique<SnapPlayer>(); if (!p->V.initVS(&res, n, i, i == 0 ? 15 : -1, getenv("VS_ANIM") ? atoi(getenv("VS_ANIM")) : 3, cfg.team[i], vsIa ? (i == 0 ? 3 : 17) : -1)) { fprintf(stderr, "marcos VS (frame00_02.arc / frame01_01.arc)\n"); return 1; }
+        auto p = std::make_unique<SnapPlayer>(); if (!(n == 8 ? p->V.initVS8(&res, i, i == 0 ? 15 : -1, cfg.team[i]) : n == 6 ? p->V.initVS6(&res, i, i == 0 ? 15 : -1, cfg.team[i]) : p->V.initVS(&res, n, i, i == 0 ? 15 : -1, getenv("VS_ANIM") ? atoi(getenv("VS_ANIM")) : 3, cfg.team[i], vsIa ? (i == 0 ? 3 : 17) : -1))) { fprintf(stderr, "marcos VS (frame00_02.arc / frame01_01.arc)\n"); return 1; }
+        if (getenv("VS_NOBG")) p->V.drawBg = false;  // depuración: sin fondo de escenario
         p->in.s = 777 + 1000 * i; p->cl.vs = &vs; p->cl.slot = i; p->g.cl = &p->cl; p->g.holdEnabled = true; p->g.init(rules, 99); p->in.well = well;
         if (cfg.type[i] == game::VT_CPU) { p->cpuIn.g = &p->g; p->cpuIn.level = cfg.aiLevel; p->cpuIn.seed = 4242 + i * 77; p->g.in = &p->cpuIn; } else p->g.in = &p->in;
         if (well) for (int y = p->g.h - 1; y < p->g.h; y++) for (int x = 1; x < p->g.w; x++) { te::Cell c; c.mino = 2 + (x + y) % 7; p->g.cells[x + y * p->g.w] = c; }

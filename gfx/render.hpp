@@ -20,6 +20,7 @@ class Renderer {
 public:
     SDL_Renderer* rn = nullptr;
     float screenW = 640, screenH = 480;   // tamaño destino en píxeles
+    float baseW = 640;                     // ancho del área base (640 = 4:3; VS 6 usa 480*ancho/alto de la pantalla para ocupar el 16:9)
     std::map<std::string, SDL_Texture*> textures;
     std::map<std::string, std::vector<SDL_Texture*>> fontSheets;
     std::map<std::string, std::shared_ptr<Font>> fonts;
@@ -31,6 +32,7 @@ public:
         SDL_Texture* t = SDL_CreateTexture(rn, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, im.w, im.h);
         if (!t) { fprintf(stderr, "[tetris] textura %dx%d fallo: %s\n", im.w, im.h, SDL_GetError()); texFailures++; return nullptr; }
         SDL_UpdateTexture(t, nullptr, im.rgba.data(), im.w * 4); SDL_SetTextureBlendMode(t, SDL_BLENDMODE_BLEND);
+        if (im.magFilter) SDL_SetTextureScaleMode(t, SDL_ScaleModeLinear);  // como la Wii (GX_LINEAR): los degradados diminutos estirados (cielo de bg_15: 5x20) salen suaves y no a escalones
         return t;
     }
     // Carga todas las texturas timg/*.tpl de un arc con el nombre de fichero como clave.
@@ -75,7 +77,7 @@ public:
         SDL_Vertex v[4]; float xs[4] = {x0, x1, x0, x1}, ys[4] = {y1, y1, y0, y0};
         for (int i = 0; i < 4; i++) {
             float sx, sy; m.apply(xs[i], ys[i], sx, sy);
-            v[i].position.x = (sx + 320.0f) * screenW / 640.0f; v[i].position.y = (240.0f - sy) * screenH / 480.0f;
+            v[i].position.x = (sx + baseW / 2) * screenW / baseW; v[i].position.y = (240.0f - sy) * screenH / 480.0f;
             v[i].tex_coord.x = uv ? uv[i * 2] : 0; v[i].tex_coord.y = uv ? uv[i * 2 + 1] : 0;
             v[i].color.r = col ? col[i][0] : 255; v[i].color.g = col ? col[i][1] : 255; v[i].color.b = col ? col[i][2] : 255; v[i].color.a = (Uint8)((col ? col[i][3] : 255) * alpha);
         }

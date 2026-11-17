@@ -120,7 +120,7 @@ public:
     bool patternEnabled = false, gravityEnabled = false;
     // DAS (FUN_800d7fd0...): temporizadores en frames
     int dasFirst = 15, dasRepeat = 3, rotFirst = 7158, rotRepeat = 7158;
-    int tL = 0, tR = 0, tA = 0, tB = 0; bool hL = false, hR = false, hA = false, hB = false; bool hardLatch = false;
+    int tL = 0, tR = 0, tA = 0, tB = 0; bool hL = false, hR = false, hA = false, hB = false; bool hardPrev = false; int hardPend = 0;  // caída dura: flanco de pulsación con memoria de 15 frames (se consume al aplicarse)
     float lockTimer = 0, genTimer = 0, fallAcc = 0;
     int lastHeight = 0;
     // scripts compilados
@@ -179,6 +179,7 @@ public:
         if (state) return;
         budget += dt;
         if (in) in->poll();
+        { bool h = in && in->hard(); if (h && !hardPrev) hardPend = 15; else if (hardPend > 0) hardPend--; hardPrev = h; }
         tickDas();
         int guard = 0;
         while (budget >= 1e-6f && state == 0 && guard++ < 64) {
@@ -317,7 +318,7 @@ private:
     void spawn(int x, int y) {
         uint32_t id = nextFromQueue();
         piece = Piece(); piece.tet = tetById(id); if (!piece.tet) piece.tet = &tets[0];
-        piece.x = x; piece.y = (float)y; piece.dir = 0; hasPiece = true; if (!btnHard()) hardLatch = false;  // el latch de caída dura se mantiene si el botón sigue pulsado (una pieza por pulsación)
+        piece.x = x; piece.y = (float)y; piece.dir = 0; hasPiece = true;
         holdUsed = false;
     }
 
@@ -369,7 +370,7 @@ private:
     bool btnRight() { return in && repeatBtn(in->right(), tR, hR, dasFirst, dasRepeat); }
     bool btnRotA() { return in && repeatBtn(in->rotA(), tA, hA, rotFirst, rotRepeat); }
     bool btnRotB() { return in && repeatBtn(in->rotB(), tB, hB, rotFirst, rotRepeat); }
-    bool btnHard() { return in && in->hard() && (eHardDrop.empty() || eHardDrop.eval(*this) != 0); }  // FUN_800d8278
+    bool btnHard() { return in && hardPend > 0 && (eHardDrop.empty() || eHardDrop.eval(*this) != 0); }  // FUN_800d8278
     bool btnHold() { return in && holdAllowed && in->hold() && (eHold.empty() || eHold.eval(*this) != 0); } // FUN_800d82dc
 
     // ---- movimiento (FUN_800d89e0 / FUN_800d8b6c) ----
@@ -424,7 +425,7 @@ private:
             if (handleInput(false) && !hasPiece) return 0;  // hold cambió de fase
             if (phase != P_FALL) return 0;
             int mode = 1; if (in && in->soft()) mode = 2;
-            if (btnHard()) { if (!hardLatch) { hardLatch = true; mode = 3; } } else hardLatch = false;
+            if (btnHard()) { hardPend = 0; mode = 3; }
             piece.mode = mode;
         }
         float speed = piece.mode == 1 ? (fallOverride > 0 ? fallOverride : eFall.eval(*this)) : piece.mode == 2 ? eSoft.eval(*this) : eHard.eval(*this);
@@ -458,7 +459,7 @@ private:
         bool moved = handleInput(true);
         if (phase != P_LOCK) return 0;
         bool forced = false;
-        if (btnHard()) { if (!hardLatch) { hardLatch = true; forced = true; if (cl) cl->event(0xd); } } else hardLatch = false;
+        if (btnHard()) { hardPend = 0; forced = true; if (cl) cl->event(0xd); }
         if (R->plok.type == 1 && !eExt.empty() && (float)piece.moveCount >= eExt.eval(*this)) forced = true;
         if (moved) {
             if (collide(0, 1, -1) == 0) { setPhase(P_FALL); return 0; }   // vuelve a caer

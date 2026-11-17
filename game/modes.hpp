@@ -23,6 +23,8 @@ inline ModeSpec modeSpec(int mode) {
     case 9:  return {Kind::Bombliss, "8044aa58.tpf2", "config_00.brlyt",   "Single", "frame00a_23.brlan",        15, 46, 0, true, true, 0};      // Bombliss: sin líneas ni hold
     case 1:  return {Kind::Versus,   "8044aa58.tpf2", "config_00.brlyt",   "VS2",    "frame00a_2_1P_03.brlan",    15, 46, 0, false, true, 0};     // Tetris vs. IA (VSIA): 2 campos (J1 + IA), bg_15, BGM_GAME_C; marcos frame00a_2_1P_03 / frame00a_3_2P_17
     case 10: return {Kind::Versus,   "8044aa58.tpf2", "config_00.brlyt",   "VS2",    "frame00a_2_1P_07.brlan",    15, 46, 0, false, true, 0};     // Tetris VS (2-4 jugadores locales): marcos VS por nº de jugadores (versus.hpp), bg_15, BGM_GAME_C
+    case 27: return {Kind::Versus,   "8044aa58.tpf2", "config_00.brlyt",   "VS2",    "frame00a_2_1P_07.brlan",    15, 46, 0, false, true, 0};     // Tetris VS 6 (6 jugadores locales en fila, marco por código): mismas reglas/bg/bgm que el 10
+    case 28: return {Kind::Versus,   "8044aa58.tpf2", "config_00.brlyt",   "VS2",    "frame00a_2_1P_07.brlan",    15, 46, 0, false, true, 0};     // Tetris VS 8 (8 jugadores locales en dos filas, marco por código): mismas reglas/bg/bgm que el 10
     case 3:  return {Kind::Shadow,   "80466f08.tpf2", "config_00.brlyt",   "Single", "frame00a_12.brlan",        15, 46, 0, true, true, 0};
     }
     return {Kind::Other, "80466f08.tpf2", "config_00.brlyt", "Single", "frame00a_00.brlan", 15, 46, 0, false, true, 0};

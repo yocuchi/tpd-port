@@ -37,7 +37,7 @@ static const uint8_t CELL_ITEM = 0x10, CELL_BOMB = 0x02;  // flags de celda: mar
 struct ItemFx { enum Type { Get, Use, Hit, SmokeStart, SmokeWipe, Kick, Shot, BombSet, BombBlast, Crush, Shift } type; int player, a, b, c; };
 
 struct ItemSystem {
-    static const int SLOTS = 3, PERIOD = 11, MAXP = 4;
+    static const int SLOTS = 3, PERIOD = 11, MAXP = MAX_PLAYERS;
     struct St {
         int slot[SLOTS] = {0, 0, 0}; float slotT[SLOTS] = {0, 0, 0};  // cola; slotT = retardo de uso de la CPU (5/3/2 s según ranura al obtenerlo)
         int pieceCnt = 0, markR = -1, markC = -1;                       // contador de piezas y celda marcada de la pieza activa (fila/columna de la rejilla 7x7 original)

@@ -62,3 +62,4 @@ nsp/control/icon_AmericanEnglish.dat
 *.orig
 # Salida cruda del decompilador (código del juego original): no se publica
 notes/*.c
+tools/hard_test

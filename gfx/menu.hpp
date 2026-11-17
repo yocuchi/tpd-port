@@ -72,11 +72,11 @@ inline void colorOf(int id, uint8_t c[3]) {
 // Tablas por modo (0..26), notes_menu.md §5
 struct ModeInfo { int msgFile, nameIdx, icon, descIdx; };
 inline const ModeInfo& modeInfo(int m) {
-    static const ModeInfo T[27] = {
+    static const ModeInfo T[29] = {
         {2,1,1,0},{2,2,2,1},{2,3,3,22},{2,4,4,3},{2,5,5,23},{2,20,15,5},{2,18,10,31},{2,12,6,24},{2,14,7,25},{2,16,8,26},
         {3,1,17,6},{3,2,18,27},{3,3,16,8},{3,4,20,9},{3,5,19,28},{3,7,13,12},{3,6,11,11},{3,15,21,29},{3,17,12,30},
-        {32,7,22,13},{32,21,9,16},{32,8,23,15},{4,1,1,0},{4,2,1,0},{4,1,1,0},{3,19,24,32},{3,20,25,33}};
-    return T[m >= 0 && m < 27 ? m : 0];
+        {32,7,22,13},{32,21,9,16},{32,8,23,15},{4,1,1,0},{4,2,1,0},{4,1,1,0},{3,19,24,32},{3,20,25,33},{3,1,17,6},{3,1,17,6}};  // 27/28 = Tetris VS 6/8 (icono del 10; nombre y descripción literales en refreshMode)
+    return T[m >= 0 && m < 29 ? m : 0];
 }
 
 class MenuSystem {
@@ -96,10 +96,10 @@ public:
     game::VsConfig vsCfg;      // configuración editada (persiste entre aperturas); main_sdl.cpp la lee al recibir startMode 10/25
     int joyCount = 0;          // mandos conectados: PER/INVITADO solo para J1 o si hay mando para ese jugador (J k = mando k-1)
     Part pwin, pcur; int pRow = 0, pCol = 1; bool pStart = false; game::VsConfig pBackup;  // 7 abriendo, 8 navegando, 9 editando celda, 10 cerrando, 11 aviso abierto, 12 aviso cerrando
-    static bool isVsMode(int m) { return m == 10 || m == 25; }
+    static bool isVsMode(int m) { return m == 10 || m == 25 || m == 27 || m == 28; }
     int msgSel = 0; int ruleType = 0;
     // id de reglas y tipo de animación de la ventana de reglas (notes_menu §4.4/§4.6)
-    static int rulesIdOf(int m) { if (m <= 0xe) return m + 1; switch (m) { case 0xf: return 0x11; case 0x10: return 0x10; case 0x11: return 0x13; case 0x12: return 0x14; case 0x13: return 0x17; case 0x14: return 0x19; case 0x15: return 0x18; case 0x19: return 0xb; case 0x1a: return 0x13; } return 1; }
+    static int rulesIdOf(int m) { if (m <= 0xe) return m + 1; switch (m) { case 0xf: return 0x11; case 0x10: return 0x10; case 0x11: return 0x13; case 0x12: return 0x14; case 0x13: return 0x17; case 0x14: return 0x19; case 0x15: return 0x18; case 0x19: return 0xb; case 0x1a: return 0x13; case 0x1b: return 0xb; } return 1; }
     static int ruleTypeOf(int id) { switch (id) { case 3: case 0xb: case 0xc: case 0xd: case 0x13: case 0x16: return 3; case 4: case 0xe: return 1; case 5: case 0xf: return 2; case 10: return 6; case 0x11: case 0x12: return 4; case 0x17: case 0x18: case 0x19: return 5; } return 0; }
     static int ruleTextOf(int id) { static const int T[0x1a] = {0, 0, 1, 22, 3, 23, 5, 31, 24, 25, 26, 6, 27, 8, 9, 28, 11, 12, 30, 29, 30, 14, 14, 13, 15, 16}; return id >= 0 && id < 0x1a ? T[id] : 0; }
     static const char* ruleAnim(int type, int which) {  // which: 0 in, 1 loop, 2 out
@@ -202,7 +202,7 @@ public:
 
     // ---------- selección de modo ----------
     static const std::vector<int>& modeList(int type) {
-        static const std::vector<int> T[4] = {{0, 1, 2, 3, 4, 7, 8, 9}, {10, 25, 11, 12, 13, 14, 15, 16, 18, 17, 26}, {5, 6}, {19, 20, 21, 0}};
+        static const std::vector<int> T[4] = {{0, 1, 2, 3, 4, 7, 8, 9}, {10, 25, 11, 12, 13, 14, 15, 16, 18, 17, 26, 27, 28}, {5, 6}, {19, 20, 21, 0}};
         return T[type & 3];
     }
     static int iconOf(int mode) { return modeInfo(mode).icon; }
@@ -219,7 +219,7 @@ public:
         arrowL.play("menu2_arrow_left_in.brlan", "menu2_arrow_left_on.brlan"); arrowR.play("menu2_arrow_right_in.brlan", "menu2_arrow_right_on.brlan");
         int n = (int)modeIds.size();
         for (int i = 0; i < n; i++) {
-            auto p = std::make_unique<Part>(); p->init(R, menuArc, cache, "menu2_mode_icon.brlyt", 0x10e); p->setPos(-25.0f * (n - 1) + 50.0f * i, 0);
+            auto p = std::make_unique<Part>(); p->init(R, menuArc, cache, "menu2_mode_icon.brlyt", 0x10e); const float sp = n > 12 ? 46.0f : 50.0f; p->setPos(-0.5f * sp * (n - 1) + sp * i, 0);  // 13 iconos (con VS 8) no caben a 50 px
             if (i == sel) p->play(iconAnim(modeIds[i], "in"), iconAnim(modeIds[i], "on"), iconAnim(modeIds[i], "on02")); else p->play(iconAnim(modeIds[i], "in"));
             icons.push_back(std::move(p));
         }
@@ -230,10 +230,18 @@ public:
         if (prevSel >= 0 && prevSel != sel) { icons[prevSel]->play(iconAnim(modeIds[prevSel], "off")); icons[sel]->play(iconAnim(modeIds[sel], "on"), iconAnim(modeIds[sel], "on02")); }
         prevSel = sel; int m = modeIds[sel]; const ModeInfo& mi = modeInfo(m);
         modeName.setText("TextBox_01", M->get(mi.msgFile, mi.nameIdx)); winC.setText("text_ope_main_00", M->get(11, mi.descIdx));
+        if (m == 27) { modeName.setText("TextBox_01", u"TETRIS VS 6"); winC.setText("text_ope_main_00", u"Seis jugadores en fila.\nLos mandos conectados juegan\ncomo humanos y el resto,\nla CPU. Sin objetos."); }  // sin texto original
+        if (m == 28) { modeName.setText("TextBox_01", u"TETRIS VS 8"); winC.setText("text_ope_main_00", u"Ocho jugadores en dos filas.\nLos mandos conectados juegan\ncomo humanos y el resto,\nla CPU. Sin objetos."); }  // sin texto original
         if (phase == Idle) playBar.setEnd("menu_play_on.brlan");
     }
     void finishStart() { lastSel[listType] = sel; pendingStart = modeIds[sel]; nextScreen = None; phase = Out; outTimer = 0; leaveMode(); }
-    void startSelectedMode() { if (isVsMode(modeIds[sel])) { openPlayers(); return; } finishStart(); }
+    void startSelectedMode() {
+        if (modeIds[sel] == 27 || modeIds[sel] == 28) {  // VS 6/8: sin ventana de jugadores; J1 humano, J2..Jn humanos si hay mando para ese índice, si no CPU; equipos todos distintos, sin hándicap
+            vsCfg = game::VsConfig(); vsCfg.autoHandicap = false;
+            const int nn = modeIds[sel] == 28 ? 8 : 6; for (int j = 0; j < game::MAX_PLAYERS; j++) { vsCfg.type[j] = j >= nn ? game::VT_OFF : j == 0 || canHuman(j) ? game::VT_HUMAN : game::VT_CPU; vsCfg.team[j] = j; vsCfg.handicap[j] = 0; }
+            finishStart(); return;
+        }
+        if (isVsMode(modeIds[sel])) { openPlayers(); return; } finishStart(); }
 
     // ---------- ventana de jugadores (CMenuMultiPlayerWindow, notes_vs §1.2-1.4) ----------
     static std::u16string num16(int v) { std::string t = std::to_string(v); return std::u16string(t.begin(), t.end()); }
@@ -339,7 +347,7 @@ public:
     bool levelWarned = false;             // aviso #0xcb ya mostrado en esta visita
     struct SetRow { int id; int sub; };   // id = game::SettingId (página 0) o fila 0..13 de objetos (página 1); sub = 0 botón / 1 con valor
     std::vector<SetRow> rows;
-    static int normMode(int m) { return m == 25 ? 10 : m; }
+    static int normMode(int m) { return m == 25 ? 10 : m; }  // el 27 (VS 6) conserva su id: Settings::of() y maskOf() lo tratan como el 10
     game::ModeSettings& ms() { return cfg->of(normMode(setMode)); }
     static const int* objBits() { static const int B[13] = {0, 1, 2, 3, 4, 5, 7, 8, 9, 11, 17, 14, 15}; return B; }                       // fila 1..13 → bit de la máscara (id-1)
     static const int* objText() { static const int T[13] = {49, 50, 51, 52, 53, 146, 57, 56, 55, 54, 359, 358, 357}; return T; }          // 009_config

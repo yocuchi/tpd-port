@@ -44,7 +44,7 @@ struct PlayerBase {
     int team = 0;       // color de equipo 0..3
     int handicap = 0;   // 0..5
     bool cpu = false;   // jugador controlado por la IA
-    bool alive = true; int wins = 0;
+    bool alive = true; int wins = 0; int outOrder = 0;  // outOrder: 1 = primero en ser eliminado (auto-hándicap)
     // estado de las reglas de ataque/recepción
     int runCount = -1, runCol = 0;         // racha de columna de hueco del receptor (G+0x2c58/0x2c5c)
     int insertTimer = 0;                   // pasos hasta insertar la siguiente línea de basura
@@ -64,21 +64,22 @@ struct VersusState {
     int winTeam = -1;      // color del equipo ganador (con equipos) o -1
     bool teamMode = false, over = false, draw = false;
     std::function<void(int)> onSe;  // efectos de sonido (0x6D basura, 0x41 caída)
+    int outCounter = 0;
     int n() const { return (int)P.size(); }
     static constexpr int SE_BLOCK_UP = 0x6D, SE_PLAYER_OUT = 0x41;
-    static int teamMino(int team) { static const int T[4] = {2, 4, 3, 6}; return T[team & 3]; }  // rojo, azul, verde, amarillo (blocks00: 2 rojo, 3 verde, 4 azul, 6 amarillo)
+    static int teamMino(int team) { static const int T[MAX_PLAYERS] = {2, 4, 3, 6, 7, 5, 8, 1}; return T[team >= 0 && team < MAX_PLAYERS ? team : team & 3]; }  // rojo, azul, verde, amarillo (blocks00: 2 rojo, 3 verde, 4 azul, 6 amarillo) + VS 6: 7 cian, 5 naranja
 
     uint32_t rs = 0x2545F491u;
     uint32_t rnd() { rs ^= rs << 13; rs ^= rs >> 17; rs ^= rs << 5; return rs; }
 
     // players: los jugadores activos en orden J1..J4 (cfg.type != VT_OFF). Asigna slot/equipo/hándicap/CPU y aplica el hándicap inicial (§1.5).
     void start(const std::vector<PlayerBase*>& players, const VsConfig& c = VsConfig(), uint32_t seed = 1) {
-        P = players; cfg = c; winner = winnerCfgSlot = winTeam = -1; over = draw = false; rs = seed * 2654435761u + 0x9E3779B9u; if (!rs) rs = 1;
-        std::vector<int> act; for (int j = 0; j < 4; j++) if (cfg.type[j] != VT_OFF) act.push_back(j);
+        P = players; cfg = c; winner = winnerCfgSlot = winTeam = -1; over = draw = false; outCounter = 0; rs = seed * 2654435761u + 0x9E3779B9u; if (!rs) rs = 1;
+        std::vector<int> act; for (int j = 0; j < MAX_PLAYERS; j++) if (cfg.type[j] != VT_OFF) act.push_back(j);
         teamMode = cfg.hasTeams();
         for (int i = 0; i < (int)P.size(); i++) {
-            PlayerBase& p = *P[i]; p.slot = i; p.alive = true; p.pendingGarbage.clear();
-            int j = i < (int)act.size() ? act[i] : i; p.cfgSlot = j; p.team = cfg.team[j] & 3; p.handicap = cfg.handicap[j]; p.cpu = cfg.type[j] == VT_CPU;
+            PlayerBase& p = *P[i]; p.slot = i; p.alive = true; p.outOrder = 0; p.pendingGarbage.clear();
+            int j = i < (int)act.size() ? act[i] : i; p.cfgSlot = j; p.team = cfg.team[j] >= 0 && cfg.team[j] < MAX_PLAYERS ? cfg.team[j] : cfg.team[j] & 3; p.handicap = cfg.handicap[j]; p.cpu = cfg.type[j] == VT_CPU;
             p.runCount = -1; p.runCol = 0; p.insertTimer = 0; p.lastLowestFull = -1; p.lastFullRows = 0; p.spinKind = 0; p.b2bChain = false; p.pieceId = 0; p.sent = p.received = p.cancelled = 0;
             if (cfg.mapPattern >= 0) applyMap(p, cfg.mapPattern); else applyHandicap(p);  // AJUSTES: "Mapa" sustituye al hándicap
         }
@@ -205,9 +206,9 @@ struct VersusState {
     // (con equipos). Sin vivos (caída simultánea) = empate. Devuelve true cuando la partida ha terminado.
     bool update() {
         if (over) return true;
-        for (auto* p : P) if (p->alive && p->g.state == 2) { p->alive = false; if (onSe) onSe(SE_PLAYER_OUT); }
-        int c = aliveCount(); bool teamsLeft[4] = {false, false, false, false}; int nt = 0;
-        for (auto* p : P) if (p->alive && !teamsLeft[p->team & 3]) { teamsLeft[p->team & 3] = true; nt++; }
+        for (auto* p : P) if (p->alive && p->g.state == 2) { p->alive = false; p->outOrder = ++outCounter; if (onSe) onSe(SE_PLAYER_OUT); }
+        int c = aliveCount(); bool teamsLeft[MAX_PLAYERS] = {}; int nt = 0;
+        for (auto* p : P) if (p->alive && !teamsLeft[p->team % MAX_PLAYERS]) { teamsLeft[p->team % MAX_PLAYERS] = true; nt++; }
         if (nt <= 1) {
             over = true; draw = c == 0;
             for (auto* p : P) if (p->alive) { if (teamMode) winTeam = p->team; else { winner = p->slot; winnerCfgSlot = p->cfgSlot; } p->wins++; }
@@ -221,13 +222,14 @@ struct VersusState {
     void playEndTelops(std::vector<view::Telop>& TL, const view::Telop& base) const {
         TL.resize(1); view::Telop& t = TL[0]; t.stop(); t.share(base); char an[48];
         if (draw || (winner < 0 && winTeam < 0)) { t.play("draw.brlyt", "draw_anim01.brlan"); return; }
+        if ((teamMode && winTeam >= 4) || (!(teamMode && winTeam >= 0) && winnerCfgSlot >= 4)) { t.play("win.brlyt", "win_anim01.brlan"); return; }  // VS 6/8: no hay telop del 5.º..8.º jugador/equipo: "WIN!" genérico
         if (teamMode && winTeam >= 0) { snprintf(an, sizeof an, "team_win_anim%02d.brlan", winTeam + 1); t.play("team_win.brlyt", an); }
         else { snprintf(an, sizeof an, "multi_win_anim%02d.brlan", std::max(0, winnerCfgSlot) + 1); t.play("multi_win.brlyt", an); }
     }
 
     // Textos del marco VS de un jugador (el marco tiene sus propios TextBox: TextBox_time, TextBox_lines…; los que la anim deja ocultos no se dibujan).
     static void hud(PlayerBase& p) {
-        char b[32]; snprintf(b, sizeof b, "%d", std::min(9999, p.g.lines));
+        p.V.vs6Wins = p.wins; char b[32]; snprintf(b, sizeof b, "%d", std::min(9999, p.g.lines));
         std::string t = vsFmtTime(p.g.gameTime);
         for (const char* n : {"TextBox_lines", "TextBox_lines_01"}) p.V.setTextS(n, b);
         for (const char* n : {"TextBox_time", "TextBox_time_00", "TextBox_time_01"}) p.V.setTextS(n, t);
@@ -236,7 +238,7 @@ struct VersusState {
     // Se dibuja con V.drawTop (sobre el marco, que trae la franja negra `left_00`).
     static void drawPenalty(PlayerBase& p, view::GameView& V) {
         int nn = std::min((int)p.pendingGarbage.size(), std::min(V.pc.penaltyNum, (int)V.pc.penaltyPos.size())); if (nn <= 0 || !V.atlas) return;
-        float bs = V.pc.blockSize * V.pc.blockScale;
+        float bs = V.pc.penaltySize > 0 ? V.pc.penaltySize : V.pc.blockSize * V.pc.blockScale;
         for (int i = 0; i < nn; i++) { SDL_Rect s; V.minoRect(p.pendingGarbage[i].color, s); V.blit(V.atlas, s, V.pc.penaltyPos[i].first - bs / 2, V.pc.penaltyPos[i].second - bs / 2, bs, bs); }
     }
 };

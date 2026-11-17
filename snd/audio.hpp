@@ -40,6 +40,9 @@ public:
 
     void playBgm(int id) { if (!ok || id == currentBgm) return; const SoundInfo* si = info(id); if (!si) return; SDL_LockAudioDevice(dev); startSeq(bgm, si, 0.8f); bgmVol = 1.0f; bgmFadeRate = 0; currentBgm = id; SDL_UnlockAudioDevice(dev); }
     void stopBgm(float fadeSec = 0.5f) { if (!ok) return; SDL_LockAudioDevice(dev); if (fadeSec <= 0) { bgm.stop(); bgmVol = 0; } else bgmFadeRate = 1.0f / (fadeSec * OUT_RATE); currentBgm = -1; SDL_UnlockAudioDevice(dev); }
+    // SE en bucle (p. ej. SE_ALERT, cuya secuencia se repite sola): devuelve la ranura para pararlo con stopSe
+    int playSeLoop(int id) { if (!ok || !seOn) return -1; const SoundInfo* si = info(id); if (!si) return -1; SDL_LockAudioDevice(dev); int k = seNext; Sequencer& s = se[k]; seNext = (seNext + 1) % 8; startSeq(s, si, 0.9f); SDL_UnlockAudioDevice(dev); return k; }
+    void stopSe(int slot) { if (!ok || slot < 0 || slot >= 8) return; SDL_LockAudioDevice(dev); se[slot].stop(); SDL_UnlockAudioDevice(dev); }
     void playSe(int id) { if (!ok || !seOn) return; const SoundInfo* si = info(id); if (!si) return; SDL_LockAudioDevice(dev); Sequencer& s = se[seNext]; seNext = (seNext + 1) % 8; startSeq(s, si, 0.9f); SDL_UnlockAudioDevice(dev); }
 
     static void cb(void* ud, Uint8* stream, int len) { ((SoundSystem*)ud)->mix((float*)stream, len / (int)(sizeof(float) * 2)); }

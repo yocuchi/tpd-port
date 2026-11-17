@@ -15,7 +15,7 @@ public:
     struct Act { const gx::Arc* arc = nullptr; std::unique_ptr<lyt::Layout> L; const lyt::Anim* A = nullptr; float f = 0, x = 0, y = 0, sc = 1; bool loop = false; bool done() const { return !A || A->frameCount == 0 || (!loop && f >= A->frameCount - 1); } };
     struct Cloud { std::unique_ptr<lyt::Layout> L; const lyt::Anim *disp = nullptr, *wipe = nullptr; float f = 0; int ph = 2; };  // ph 0 aparece/permanece, 1 se retira, 2 fuera
     struct Persist { Act a; bool on = false; };
-    struct PV { std::vector<Act> act; Cloud cloud[7]; Persist accel, stop, cascade, confuse, fix; std::unique_ptr<lyt::Layout> climber; std::unique_ptr<lyt::Layout> mark; const lyt::Anim* climbAnim[3] = {}; Act hide; float markF = 0, clF = 0; int fixId = 0; } pv[4];
+    struct PV { std::vector<Act> act; Cloud cloud[7]; Persist accel, stop, cascade, confuse, fix; std::unique_ptr<lyt::Layout> climber; std::unique_ptr<lyt::Layout> mark; const lyt::Anim* climbAnim[3] = {}; Act hide; float markF = 0, clF = 0; int fixId = 0; } pv[game::MAX_PLAYERS];
 
     std::unique_ptr<lyt::Layout> mk(const gx::Arc& a, const std::string& n) { size_t len; const uint8_t* d = a.get("/" + n, len); if (!d) d = a.get(n, len); auto L = std::make_unique<lyt::Layout>(); if (!d || !L->parse(d, len)) return nullptr; R->bindTextures(*L, a); return L; }
     const lyt::Anim* anim(const gx::Arc& a, const std::string& n) {

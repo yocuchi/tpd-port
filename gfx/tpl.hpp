@@ -7,7 +7,7 @@
 
 namespace gx {
 
-struct Image { int w = 0, h = 0; std::vector<uint8_t> rgba; };
+struct Image { int w = 0, h = 0; std::vector<uint8_t> rgba; int magFilter = 1; };  // magFilter: GX_NEAR 0 / GX_LINEAR 1 (cabecera TPL; TEX0 no lo trae → lineal, como GX por defecto)
 
 inline uint16_t be16(const uint8_t* p) { return (p[0] << 8) | p[1]; }
 inline uint32_t be32(const uint8_t* p) { return ((uint32_t)p[0] << 24) | (p[1] << 16) | (p[2] << 8) | p[3]; }
@@ -77,7 +77,7 @@ inline bool loadTPL(const uint8_t* d, size_t n, Image& out) {
     int h = be16(d + ioff), w = be16(d + ioff + 2); uint32_t fmt = be32(d + ioff + 4), doff = be32(d + ioff + 8);
     std::vector<uint32_t> pal;
     if (poff) { int pn = be16(d + poff); uint32_t pfmt = be32(d + poff + 4), pdoff = be32(d + poff + 8); pal = decodePalette(d + pdoff, pn, pfmt); }
-    out = decode(d + doff, w, h, fmt, pal.empty() ? nullptr : &pal);
+    out = decode(d + doff, w, h, fmt, pal.empty() ? nullptr : &pal); out.magFilter = (int)be32(d + ioff + 0x18) == 0 ? 0 : 1;  // filtro de ampliación del TPL (+0x18)
     return true;
 }
 
