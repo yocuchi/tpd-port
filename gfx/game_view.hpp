@@ -73,7 +73,7 @@ public:
     float fbBaseW = 160, fbBaseH = 320;    // tamaño del fondo negro del campo (frame00b 160x320, frame01b 120x240) para escalarlo al campo
     bool ok = false;
     bool vs6 = false; int vs6Slot = 0, vs6Team = 0, vs6Wins = 0; float vs6BaseW = 0, vs6U = 8, vs6Cx = 0, vs6BoxY = 0, vs6Fy = 0;
-    int vs6Cols = 6, vs6Rows = 1; bool vs6Side = false; float vs6SideX = 0, vs6SideY = 0;  // disposición: VS 6 = 6x1 con cajas encima; VS 8 (initVS8) = 4x2 con cajas a la derecha  // Tetris VS 6 (initVS6): marco dibujado por código (sin brlyt)
+    int vs6Cols = 6, vs6Rows = 1, vs6Count = 6; bool vs6Side = false; float vs6SideX = 0, vs6SideY = 0;  // disposición: n<=6 = nx1 con cajas encima; n=7/8 = 4x2 con cajas a la derecha  // Tetris VS 6 (initVS6): marco dibujado por código (sin brlyt)
     // Corredor de etapas: desplazamiento del campo (celdas), línea de meta frame00f (frontera visible 0..20, <0 oculta)
     float scrollY = 0, goalBoundary = -1; bool clipField = false; std::unique_ptr<lyt::Layout> goalLyt; lyt::Anim goalAnim; float goalFrame = 0;
 
@@ -116,15 +116,13 @@ public:
         setFieldConfig("config_00.brlyt", n == 2 ? "VS2" : n == 3 ? "VS3" : "VS4", slot + 1);
         ok = atlas != nullptr; return ok;
     }
-    // Tetris VS 6 (modo 27): campo `slot` (0..5) de una fila de 6 en 640x480, sin marco brlyt (el original no trae marcos para 6): el borde, los recuadros de
-    // hold/next, la etiqueta Pn y el contador de victorias se dibujan con rectángulos (fuente de píxeles 3x5, ver drawVs6). Celda de 8 px: campo 10x20 = 80x160.
-    // Reparto: paso 106 px, centro del campo en x = 53 + 106*slot, y = 150..310; hold/next encima (y 92..148), Pn y victorias debajo, Penalty a la derecha.
-    bool initVS6(GameRes* r, int slot, int bgIdx = -1, int team = -1) { return initVsBig(r, slot, bgIdx, team, 6, 1, false); }
-    // Tetris VS 8 (modo 28): 4 columnas x 2 filas (alto 240 cada una); hold/next/Pn en una columna a la derecha del campo, barra Penalty a la izquierda.
-    bool initVS8(GameRes* r, int slot, int bgIdx = -1, int team = -1) { return initVsBig(r, slot, bgIdx, team, 4, 2, true); }
-    bool initVsBig(GameRes* r, int slot, int bgIdx, int team, int cols, int rows, bool side) {
-        attachRes(r); if (!res->hasVs4 || slot < 0 || slot >= cols * rows) return false;
-        vs6Cols = cols; vs6Rows = rows; vs6Side = side;
+    // Tetris VS AUTO 5-8 (modo 27): campo `slot` (0..n-1) de n jugadores (5..8), sin marco brlyt (el original no trae marcos para tantos): el borde, los recuadros de
+    // hold/next, la etiqueta Pn y el contador de victorias se dibujan con rectángulos (fuente de píxeles 3x5, ver drawVs6).
+    // Disposición: n <= 6 = una fila de n columnas (paso W/n, hold/next encima del campo, Penalty a la derecha); n = 7/8 = 4 columnas x 2 filas (alto 240 cada una),
+    // hold/next/Pn en una columna a la derecha del campo y Penalty a la izquierda; con n = 7 la fila inferior (3 campos) queda centrada.
+    bool initVsBig(GameRes* r, int slot, int n, int bgIdx = -1, int team = -1) {
+        attachRes(r); n = std::max(5, std::min(8, n)); if (!res->hasVs4 || slot < 0 || slot >= n) return false;
+        vs6Cols = n <= 6 ? n : 4; vs6Rows = n <= 6 ? 1 : 2; vs6Side = n > 6; vs6Count = n;
         frame.reset(); titleLyt.reset(); goalLyt.reset(); frameAnim = lyt::Anim();
         frameB = mkLayout(res->frame3Arc, "frame01b.brlyt"); if (frameB) { loadAnim(res->frame3Arc, "frame01b_00.brlan", frameBAnim); frameBAnim.apply(*frameB, 0); }
         fbBaseW = 120.0f; fbBaseH = 240.0f; drawBg = slot == 0; placeFrame = false; if (bgIdx >= 0) setBackground(bgIdx);
@@ -135,8 +133,9 @@ public:
     // recuadros de hold/next de 7u encima, Pn y victorias debajo; el conjunto (30u+6) se centra en vertical.
     void layoutVs8() {
         float W = R->baseW; vs6BaseW = W; float step = W / vs6Cols; float u = floorf(std::min((240 - 8) / 20.0f, (step - 56) / 14)); if (u < 6) u = 6; if (u > 12) u = 12; vs6U = u;
-        int col = vs6Slot % vs6Cols, row = vs6Slot / vs6Cols; float sw = 4.5f * u, pw = floorf(1.1f * u) + 2, bw = pw + 10 * u + 4 + sw;  // penalty+borde | campo | borde+separación | columna
-        float L = floorf(step * (col + 0.5f) - bw / 2), fx = L + pw, m = floorf((240 - 20 * u) / 2), fy = row * 240 + m; float cx = fx + 5 * u; vs6Cx = cx; vs6Fy = fy; vs6BoxY = fy;
+        int col = vs6Slot % vs6Cols, row = vs6Slot / vs6Cols; float colOff = 0; if (row == vs6Rows - 1) { int inRow = vs6Count - row * vs6Cols; if (inRow < vs6Cols) colOff = (vs6Cols - inRow) / 2.0f; }  // última fila incompleta (7 jugadores): centrada
+        float sw = 4.5f * u, pw = floorf(1.1f * u) + 2, bw = pw + 10 * u + 4 + sw;  // penalty+borde | campo | borde+separación | columna
+        float L = floorf(step * (col + colOff + 0.5f) - bw / 2), fx = L + pw, m = floorf((240 - 20 * u) / 2), fy = row * 240 + m; float cx = fx + 5 * u; vs6Cx = cx; vs6Fy = fy; vs6BoxY = fy;
         float sx = fx + 10 * u + 4; vs6SideX = sx; vs6SideY = fy; float ps = u / 16, hh = 3.5f * u, ny = fy + hh + 2;
         pc = PlayerCfg(); pc.blockSize = u; pc.blockScale = 1; pc.left = fx + u / 2; pc.top = fy + u / 2; pc.centerX = cx; pc.centerY = fy + 10 * u; pc.picX = cx; pc.picY = fy + 10 * u;
         pc.nextNum = 3; pc.holdNum = 1; pc.holdPos.push_back({sx + sw / 2, fy + 2.3f * u}); pc.holdScale.push_back(ps);
@@ -145,7 +144,7 @@ public:
     }
     void layoutVs6() {
         if (vs6Side) { layoutVs8(); return; }
-        float W = R->baseW; vs6BaseW = W; float step = W / 6; float u = floorf((step - 26) / 10); if (u < 6) u = 6; if (u > 12) u = 12; vs6U = u;
+        float W = R->baseW; vs6BaseW = W; float step = W / vs6Cols; float u = floorf((step - 26) / 10); if (u < 6) u = 6; if (u > 12) u = 12; vs6U = u;
         float cx = step * (vs6Slot + 0.5f); vs6Cx = cx; float total = 30 * u + 6; float m = floorf((480 - total) / 2); vs6BoxY = m; float fy = m + 7 * u + 3; vs6Fy = fy;
         pc = PlayerCfg(); pc.blockSize = u; pc.blockScale = 1; pc.left = cx - 5 * u + u / 2; pc.top = fy + u / 2; pc.centerX = cx; pc.centerY = fy + 10 * u; pc.picX = cx; pc.picY = 240;
         pc.nextNum = 3; pc.holdNum = 1; float ps = u / 16; pc.holdPos.push_back({cx - 2.75f * u, m + 4 * u}); pc.holdScale.push_back(ps);
@@ -218,7 +217,7 @@ public:
         const Uint8* c = TC[vs6Team % 8]; float u = vs6U, cx = vs6Cx, fx = cx - 5 * u, fy = vs6Fy, fw = 10 * u, fh = 20 * u, by = vs6BoxY, bh = 7 * u;
         fillRect(fx - 2, fy - 2, fw + 4, 2, c[0], c[1], c[2], 255); fillRect(fx - 2, fy + fh, fw + 4, 2, c[0], c[1], c[2], 255);  // borde de 2 px del color del equipo
         fillRect(fx - 2, fy, 2, fh, c[0], c[1], c[2], 255); fillRect(fx + fw, fy, 2, fh, c[0], c[1], c[2], 255);
-        if (vs6Side) {  // VS 8: columna a la derecha del campo: HOLD, NEXT (3 piezas), Pn + victorias
+        if (vs6Side) {  // 7/8 jugadores: columna a la derecha del campo: HOLD, NEXT (3 piezas), Pn + victorias
             float sx = vs6SideX, sw = 4.5f * u, hh = 3.5f * u, ny = fy + hh + 2, nh = 9 * u; float px8 = floorf(u / 8); if (px8 < 1) px8 = 1;
             fillRect(sx, fy, sw, hh, 0, 0, 0, 150); fillRect(sx, ny, sw, nh, 0, 0, 0, 150); pixText("HOLD", sx + 2, fy + 2, px8, 200, 200, 200); pixText("NEXT", sx + 2, ny + 2, px8, 200, 200, 200);
             float lp8 = floorf(u / 4); if (lp8 < 2) lp8 = 2; float ly = ny + nh + 5; char b8[8]; snprintf(b8, sizeof b8, "P%d", vs6Slot + 1); pixText(b8, sx, ly, lp8, c[0], c[1], c[2]);
@@ -235,7 +234,7 @@ public:
         if (bg && drawBg) { if (bgAnim.frameCount > 0) { bgFrame += dt * 60.0f; if (bgFrame >= bgAnim.frameCount) bgFrame -= bgAnim.frameCount; bgAnim.apply(*bg, bgFrame); } R->draw(*bg); }
         float bs = pc.blockSize * pc.blockScale; int top = g.h / 2; float fx = pc.left - bs / 2, fy = pc.top - bs / 2;  // Left/Top = centro de la primera celda
         if (frameB) { if (frameB->root) { frameB->root->x = pc.centerX - 320; frameB->root->y = 240 - pc.centerY; frameB->root->sx = (g.w * bs) / fbBaseW; frameB->root->sy = ((g.h / 2) * bs) / fbBaseH; }
-            if (vs6) {  // VS 6: frame01b es más ancho que el campo (en el VS de 4 lo tapa el marco): fondo oscuro sólido y recorte al campo
+            if (vs6) {  // modo 27: frame01b es más ancho que el campo (en el VS de 4 lo tapa el marco): fondo oscuro sólido y recorte al campo
                 float sx = R->screenW / R->baseW, sy = R->screenH / 480.0f; SDL_Rect c = {(int)lroundf(fx * sx), (int)lroundf(fy * sy), (int)lroundf(g.w * bs * sx), (int)lroundf((g.h - top) * bs * sy)};
                 (void)c; fillRect(fx, fy, g.w * bs, (g.h - top) * bs, 8, 8, 16, 235); for (int k = 1; k < g.w; k++) fillRect(fx + k * bs, fy, 1, (g.h - top) * bs, 255, 255, 255, 18); for (int k = 1; k < g.h - top; k++) fillRect(fx, fy + k * bs, g.w * bs, 1, 255, 255, 255, 18);  // rejilla propia en vez de frame01b
             } else R->draw(*frameB); }

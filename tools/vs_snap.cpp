@@ -1,4 +1,4 @@
-// Captura de una partida VS local (2-4 jugadores; 6 = Tetris VS 6, modo 27; 8 = Tetris VS 8, modo 28): vs_snap salida.bmp [jugadores=2] [frames=600] [frames de telop=300] [pozo=0|1]
+// Captura de una partida VS local (2-4 jugadores; 5-8 = Tetris VS AUTO 5-8, modo 27 con esa N): vs_snap salida.bmp [jugadores=2] [frames=600] [frames de telop=300] [pozo=0|1]
 //   Se detiene al quedar un solo jugador vivo (entonces muestra el telop de fin tras [frames de telop]); pozo=1 prerrellena la fila inferior para provocar despejes.
 //   Entradas aleatorias por defecto. Variables de entorno (verificación de las reglas VS):
 //     VS_CPU=1111   máscara por jugador (J1..J4; 6 dígitos con 6 jugadores): 1 = lo juega la IA (game/vs_ai.hpp); VS_LEVEL=0..14 nivel de IA
@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
     lyt::Renderer R(rn); R.screenW = (float)SW; R.screenH = 480; R.baseW = wide ? 480.0f * SW / 480 : 640;
     for (const char* f : {"tetrisfont00.brfna", "tetrisfont01.brfna", "tetrisfont02.brfna"}) { auto d = readFile(std::string("assets_src/") + f); R.loadFont(f, d.data(), d.size()); }
     bool vsIa = getenv("VS_IA") && atoi(getenv("VS_IA"));  // VSIA
-    int n = vsIa ? 2 : argc > 2 ? atoi(argv[2]) : 2; if (n < 2) n = 2; if (n > 4) n = n >= 7 ? 8 : 6; int frames = argc > 3 ? atoi(argv[3]) : 600; int telopFrames = argc > 4 ? atoi(argv[4]) : 300; bool well = argc > 5 && atoi(argv[5]);
+    int n = vsIa ? 2 : argc > 2 ? atoi(argv[2]) : 2; if (n < 2) n = 2; if (n > 8) n = 8; int frames = argc > 3 ? atoi(argv[3]) : 600; int telopFrames = argc > 4 ? atoi(argv[4]) : 300; bool well = argc > 5 && atoi(argv[5]);
     view::GameRes res; if (!res.load(&R, "assets_src/")) { fprintf(stderr, "recursos\n"); return 1; }
     auto buf = readFile("data/8044aa58.tpf2"); tpf::Rules rules = tpf::parse(buf.data(), buf.size());
     game::VersusState vs; std::vector<std::unique_ptr<SnapPlayer>> PL; std::vector<game::PlayerBase*> base;
@@ -47,7 +47,7 @@ int main(int argc, char** argv) {
     const char* cpuMask = getenv("VS_CPU"); if (cpuMask) for (int i = 0; i < n && cpuMask[i]; i++) if (cpuMask[i] == '1') cfg.type[i] = game::VT_CPU;
     bool verbose = getenv("VS_VERBOSE") && atoi(getenv("VS_VERBOSE"));
     for (int i = 0; i < n; i++) {
-        auto p = std::make_unique<SnapPlayer>(); if (!(n == 8 ? p->V.initVS8(&res, i, i == 0 ? 15 : -1, cfg.team[i]) : n == 6 ? p->V.initVS6(&res, i, i == 0 ? 15 : -1, cfg.team[i]) : p->V.initVS(&res, n, i, i == 0 ? 15 : -1, getenv("VS_ANIM") ? atoi(getenv("VS_ANIM")) : 3, cfg.team[i], vsIa ? (i == 0 ? 3 : 17) : -1))) { fprintf(stderr, "marcos VS (frame00_02.arc / frame01_01.arc)\n"); return 1; }
+        auto p = std::make_unique<SnapPlayer>(); if (!(n >= 5 ? p->V.initVsBig(&res, i, n, i == 0 ? 15 : -1, cfg.team[i]) : p->V.initVS(&res, n, i, i == 0 ? 15 : -1, getenv("VS_ANIM") ? atoi(getenv("VS_ANIM")) : 3, cfg.team[i], vsIa ? (i == 0 ? 3 : 17) : -1))) { fprintf(stderr, "marcos VS (frame00_02.arc / frame01_01.arc)\n"); return 1; }
         if (getenv("VS_NOBG")) p->V.drawBg = false;  // depuración: sin fondo de escenario
         p->in.s = 777 + 1000 * i; p->cl.vs = &vs; p->cl.slot = i; p->g.cl = &p->cl; p->g.holdEnabled = true; p->g.init(rules, 99); p->in.well = well;
         if (cfg.type[i] == game::VT_CPU) { p->cpuIn.g = &p->g; p->cpuIn.level = cfg.aiLevel; p->cpuIn.seed = 4242 + i * 77; p->g.in = &p->cpuIn; } else p->g.in = &p->in;

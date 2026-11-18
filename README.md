@@ -25,7 +25,7 @@ bancos del BRSAR original.
 |---|---|---|
 | ![](docs/img/bombliss.png) | ![](docs/img/climber.png) | ![](docs/img/drop.png) |
 
-| Sombra | Objetos en VS | Tetris VS 8 (mod) |
+| Sombra | Objetos en VS | Tetris VS AUTO 5-8 (mod) |
 |---|---|---|
 | ![](docs/img/shadow.png) | ![](docs/img/items.png) | ![](docs/img/vs8.png) |
 
@@ -36,9 +36,9 @@ bancos del BRSAR original.
   puntuación (spins, back-to-back, all clear, combos).
 - **Modos** (`game/`): Maratón, Maestro (20G), Sprint, Principiante, Todo limpio, Escalador,
   Corredor de etapas, Bombliss, Sombra, Tetris VS (2–4 jugadores locales, equipos, handicap,
-  CPU, 13 objetos) y VS contra la IA. Como añadido que no existe en el original, **Tetris VS 6 y
-  VS 8**: seis u ocho jugadores locales (un mando por humano, el resto CPU) con marcos
-  dibujados por código.
+  CPU, 13 objetos) y VS contra la IA. Como añadido que no existe en el original, **Tetris VS AUTO
+  5-8**: de cinco a ocho jugadores locales (un mando por humano, el resto CPU, auto-hándicap)
+  con marcos dibujados por código.
 - **Gráficos** (`gfx/`): U8, TPL, BRLYT, BRLAN, BRFNA, catálogo de mensajes, título, menús con
   ventana de reglas y ajustes, telops, pausa, ventana de resultados y récords.
 - **Sonido** (`snd/`): lector BRSAR/RBNK/RWAV y un secuenciador + sintetizador propio para las

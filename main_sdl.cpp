@@ -57,10 +57,10 @@ struct Pad {
     static int fromJoy(int b) { switch (b) { case JB_LEFT: return B_LEFT; case JB_RIGHT: return B_RIGHT; case JB_UP: return B_UP; case JB_DOWN: return B_DOWN; case JB_A: return B_A; case JB_B: return B_B; case JB_X: return B_X; case JB_Y: return B_Y; case JB_L: case JB_ZL: return B_L; case JB_R: case JB_ZR: return B_R; case JB_PLUS: return B_PLUS; } return -1; }
     static int fromKey(SDL_Keycode k) { switch (k) { case SDLK_LEFT: return B_LEFT; case SDLK_RIGHT: return B_RIGHT; case SDLK_UP: return B_UP; case SDLK_DOWN: return B_DOWN; case SDLK_RETURN: case SDLK_x: return B_A; case SDLK_z: case SDLK_BACKSPACE: return B_B; case SDLK_SPACE: return B_X; case SDLK_a: return B_Y; case SDLK_c: case SDLK_LSHIFT: return B_L; case SDLK_v: return B_R; case SDLK_ESCAPE: return B_PLUS; } return -1; }
 };
-struct PadInput : te::Input {  // mapeo de partida: ←→ mover, A rotar, B rotar inverso, ↓ suave, X caída dura, L/R hold
+struct PadInput : te::Input {  // mapeo de partida: ←→ mover, A rotar, B rotar inverso, ↓ suave, X/R/ZR caída dura, L/ZL hold
     Pad* p; bool enabled = true; bool drop = false;  // drop: Corredor de etapas (arriba = subir pieza/frenar, abajo = acelerar; sin caída fuerte)
     bool left() override { return enabled && p->down[B_LEFT]; } bool right() override { return enabled && p->down[B_RIGHT]; } bool rotA() override { return enabled && p->down[B_A]; } bool rotB() override { return enabled && p->down[B_B]; }
-    bool soft() override { return enabled && p->down[B_DOWN]; } bool hard() override { return enabled && !drop && p->down[B_X]; } bool hold() override { return enabled && (p->down[B_L] || p->down[B_R]); }
+    bool soft() override { return enabled && p->down[B_DOWN]; } bool hard() override { return enabled && !drop && (p->down[B_X] || p->down[B_R]); } bool hold() override { return enabled && p->down[B_L]; }  // R/ZR también caída rápida (Wiimote: botón A grande = R); hold solo L/ZL (gatillo B = L)
 };
 // Cliente del motor: estadísticas de los scripts y efectos de sonido por evento (FUN_80096f5c)
 struct Stats : te::Client {
@@ -120,8 +120,15 @@ int main(int argc, char** argv) {
     return realMain(argc, argv);
 #endif
 }
-static bool bigVs(int m) { return m == 27 || m == 28; }  // Tetris VS 6 / VS 8: pantalla completa 16:9, sin objetos ni hándicap
-static int bigVsN(int m) { return m == 28 ? 8 : 6; }
+static bool bigVs(int m) { return m == 27; }  // Tetris VS AUTO 5-8: 5..8 jugadores, pantalla completa 16:9, sin objetos, con auto-hándicap
+// AUTOH: variación del rating del jugador que acaba en el puesto k (0 = ganador) de n. 2-4 jugadores: tabla original 0x803FB1D8 ({+2,-2}; {+2,0,-2}; {+2,+1,-1,-2}).
+// 5-8 jugadores (extensión del port): escalera round(2 - 4k/(n-1)), redondeo hacia fuera de cero:
+//   n=5: +2 +1  0 -1 -2 | n=6: +2 +1  0  0 -1 -2 | n=7: +2 +1 +1  0 -1 -1 -2 | n=8: +2 +1 +1  0  0 -1 -1 -2
+static int ratingDelta(int n, int k) {
+    static const int D[3][4] = {{2, -2, 0, 0}, {2, 0, -2, 0}, {2, 1, -1, -2}};
+    if (n <= 4) return D[std::max(2, n) - 2][std::max(0, std::min(3, k))];
+    return (int)lround(2.0 - 4.0 * k / (n - 1));
+}
 int realMain(int argc, char** argv) {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK | SDL_INIT_AUDIO) < 0) { dbg("SDL_Init fallo"); return 1; } dbg("SDL ok");
     snd::SoundSystem SND; if (!SND.load(std::string(ASSET_DIR) + "sound.brsar")) fprintf(stderr, "sin sonido\n"); dbg("sonido cargado");
@@ -164,7 +171,7 @@ int realMain(int argc, char** argv) {
     items.onGarbage = [&](int v, int n, int f) { for (int k = 0; k < n; k++) vsState.addGarbage(*PL[v], *PL[f >= 0 ? f : v]); };  // ITEMS: escalador aplastado = 5 líneas de basura
     bool vsIa = false; game::VsIaMenu VM;  // VSIA: Tetris vs. IA (modo 1) = partida VS de 2 campos (J1 + IA); VM = menú de resultado RETRY/CONTINUE/QUIT
     const bool testGhost = getenv("TPD_TEST_GHOST") != nullptr; bool testShot = false; int tf = 0, testCont = 1;
-    int vsRating[4] = {0, 0, 0, 0};  // AUTOH: rating por puesto (notes_vs §1.5): h = clamp(h + rating/2, 0, 5); a 0 al elegir el modo en el menú
+    int vsRating[game::MAX_PLAYERS] = {};  // AUTOH: rating por puesto (notes_vs §1.5): h = clamp(h + rating/2, 0, 5); a 0 al elegir el modo en el menú
     game::VsConfig vsRun;  // configuración de la partida VS en curso (se copia de MN.vsCfg al empezar; CONTINUE la reutiliza)
     tpf::Rules R; int curMode = 0; game::ModeSpec spec = game::modeSpec(0);
     game::ClimberData climberData; climberData.load(std::string(RULES_DIR) + "climber.bin"); game::ClimberMode CM; view::ClimberView CV; bool climberLoaded = false, inClimber = false; int climberStage = 0; float climberAccum = 0;
@@ -200,18 +207,21 @@ int realMain(int argc, char** argv) {
         vsIa = curMode == 1;  // VSIA
         vsRun = vsIa ? game::VsConfig() : MN.vsCfg; if (!vsRun.valid()) { vsRun = game::VsConfig(); }
         tf = 0;
-        if (vsRun.autoHandicap) for (int j = 0; j < 4; j++) vsRun.handicap[j] = std::max(0, std::min(5, vsRun.handicap[j] + vsRating[j] / 2));  // AUTOH
+        if (vsRun.autoHandicap) for (int j = 0; j < game::MAX_PLAYERS; j++) vsRun.handicap[j] = std::max(0, std::min(5, vsRun.handicap[j] + vsRating[j] / 2));  // AUTOH
         { const game::ModeSettings& a = AJ.of(curMode); if (a.bg < 0) spec.bg = (int)((((uint32_t)time(nullptr) * 2654435761u) >> 12) % 16); }  // FONDO: en VS con Fondo = auto, uno distinto en cada partida  // sin ventana de jugadores (arranque directo): J1 humano contra una IA (vs IA: siempre J1 + IA)
         { const game::ModeSettings& a = AJ.of(curMode); vsRun.aiLevel = a.aiLevel; vsRun.slippery = a.slippery; vsRun.mapPattern = a.map ? (int)((((uint32_t)time(nullptr) * 2654435761u) >> 16) % 20) : -1; items.enabled = !vsIa && !bigVs(curMode); items.mask = AJ.itemMask; }  // AJUSTES: Nivel IA, Penalización, Mapa (patrón único para todos), Objetos
-        if (bigVs(curMode) && vsRun.activeCount() != bigVsN(curMode)) { vsRun = game::VsConfig(); for (int j = 0; j < game::MAX_PLAYERS; j++) { vsRun.type[j] = j >= bigVsN(curMode) ? game::VT_OFF : j == 0 || (int)joyIds.size() > j ? game::VT_HUMAN : game::VT_CPU; vsRun.team[j] = j; } }  // VS 6/8 lanzado sin pasar por el menú
-        if (bigVs(curMode)) { vsRun.autoHandicap = false; for (int& h : vsRun.handicap) h = 0; }
-        vsN = bigVs(curMode) ? bigVsN(curMode) : std::max(2, std::min(4, vsRun.activeCount()));
+        if (bigVs(curMode) && (vsRun.activeCount() < 5 || vsRun.activeCount() > 8)) {  // modo 27 lanzado sin pasar por el menú: N = TP_PLAYERS o nº de mandos (5..8); auto-hándicap activo
+            int nn = getenv("TP_PLAYERS") ? atoi(getenv("TP_PLAYERS")) : (int)joyIds.size(); nn = std::max(5, std::min(8, nn));
+            vsRun = game::VsConfig(); vsRun.autoHandicap = true; for (int j = 0; j < game::MAX_PLAYERS; j++) { vsRun.type[j] = j >= nn ? game::VT_OFF : j == 0 || (int)joyIds.size() > j ? game::VT_HUMAN : game::VT_CPU; vsRun.team[j] = j; }
+            if (vsRun.autoHandicap) for (int j = 0; j < game::MAX_PLAYERS; j++) vsRun.handicap[j] = std::max(0, std::min(5, vsRun.handicap[j] + vsRating[j] / 2));
+        }
+        vsN = bigVs(curMode) ? vsRun.activeCount() : std::max(2, std::min(4, vsRun.activeCount()));
         LR.overrides.clear(); resetPads(); inVs = true; vsLayout = true; scene = Scene::Game; won = false; TL.stop(); TLv.clear();
         uint32_t seed = (uint32_t)time(nullptr); std::vector<game::PlayerBase*> ptrs; int k = 0;
         for (int j = 0; j < game::MAX_PLAYERS && k < vsN; j++) {
             if (vsRun.type[j] == game::VT_OFF) continue;
             Player& p = *PL[k]; view::ClimberView::detach(p.V); p.V.extra = nullptr; p.V.clipField = false; p.V.scrollY = 0; p.V.goalBoundary = -1; p.V.showTitle = false;
-            if (!(bigVs(curMode) ? (curMode == 28 ? p.V.initVS8(&RES, k, k == 0 ? spec.bg : -1, vsRun.team[j]) : p.V.initVS6(&RES, k, k == 0 ? spec.bg : -1, vsRun.team[j])) : p.V.initVS(&RES, vsN, k, k == 0 ? spec.bg : -1, 3, vsRun.team[j], vsIa ? (k == 0 ? 3 : 17) : -1))) fprintf(stderr, "faltan frame00_02.arc / frame01_01.arc en %s\n", ASSET_DIR);
+            if (!(bigVs(curMode) ? p.V.initVsBig(&RES, k, vsN, k == 0 ? spec.bg : -1, vsRun.team[j]) : p.V.initVS(&RES, vsN, k, k == 0 ? spec.bg : -1, 3, vsRun.team[j], vsIa ? (k == 0 ? 3 : 17) : -1))) fprintf(stderr, "faltan frame00_02.arc / frame01_01.arc en %s\n", ASSET_DIR);
             bool cpu = vsRun.type[j] == game::VT_CPU;
             p.V.drawGhost = spec.ghost; p.g.init(R, seed); p.g.holdEnabled = true; p.g.lineGoal = 0; p.in.drop = false; p.in.enabled = false; p.st.state = 0; p.st.vs = &vsState; p.st.slot = k; p.st.snd = cpu ? nullptr : &SND;  // la IA no suena (solo los efectos de reglas de VersusState)
             p.practice = false; p.outTimer = 0; p.pad = &pads[j]; p.in.p = &pads[j]; p.cpu.enabled = false; p.cpu.planned = false; p.cpu.level = vsRun.aiLevel; p.cpu.seed = seed * 2246822519u + (uint32_t)(j + 1) * 3266489917u; if (!p.cpu.seed) p.cpu.seed = 1;
@@ -230,11 +240,10 @@ int realMain(int argc, char** argv) {
     auto endVs = [&]() {
         setVsPlay(false); for (int i = 0; i < vsN; i++) items.clearEffects(i);  // ITEMS
         alertOff();
-        if (vsRun.autoHandicap && !vsState.draw) {  // AUTOH: tabla 0x803FB1D8 por puesto (0 = ganador): 2 {+2,-2}; 3 {+2,0,-2}; 4 {+2,+1,-1,-2}
-            static const int D[3][4] = {{2, -2, 0, 0}, {2, 0, -2, 0}, {2, 1, -1, -2}};
+        if (vsRun.autoHandicap && !vsState.draw) {  // AUTOH: ratingDelta(n, puesto) (0 = ganador)
             std::vector<Player*> order; for (int i = 0; i < vsN; i++) order.push_back(PL[i].get());
             std::sort(order.begin(), order.end(), [](Player* a, Player* b) { int ra = a->alive ? 1000 : a->outOrder, rb = b->alive ? 1000 : b->outOrder; return ra > rb; });  // vivos primero, luego el último eliminado…
-            for (int k = 0; k < vsN; k++) { int cs = order[k]->cfgSlot; if (cs >= 0 && cs < 4) vsRating[cs] = std::max(-10000, std::min(10000, vsRating[cs] + D[vsN - 2][k])); }
+            for (int k = 0; k < vsN; k++) { int cs = order[k]->cfgSlot; if (cs >= 0 && cs < game::MAX_PLAYERS) vsRating[cs] = std::max(-10000, std::min(10000, vsRating[cs] + ratingDelta(vsN, k))); }
         }
         phase = GamePhase::Ending; phaseTimer = 0; SND.stopBgm(0.2f); if (!vsState.draw) SND.playBgm(vsIa && vsState.winner != 0 ? snd::BGM_GAMEOVER : snd::JINGLE_WINNER);  // empate: sin música (VSIA: gana la IA = BGM_GAMEOVER)
         if (vsIa) game::vsIaEndTelop(TLv, TL, vsState.draw, vsState.winner == 0); else  // VSIA: win_anim01 / lose_anim01 / draw_anim01
@@ -326,6 +335,14 @@ int realMain(int argc, char** argv) {
             if (SDL_JoystickNumAxes(js) > 1) { int x = SDL_JoystickGetAxis(js, 0), y = SDL_JoystickGetAxis(js, 1); if (x < -T) cur[slot][B_LEFT] = true; if (x > T) cur[slot][B_RIGHT] = true; if (y < -T) cur[slot][B_UP] = true; if (y > T) cur[slot][B_DOWN] = true; }
         }
         for (int b = 0; b < B_COUNT; b++) if (kb[b]) cur[0][b] = true;
+#ifndef __SWITCH__
+        {   // depuración (Mac): TP_KEYS="w a d d a l a a a" = secuencia de pulsaciones del jugador 1 (w=60 frames de espera, W=10, u/d/l/r/a/b/x/p=botón 1 frame); reproduce el camino del menú
+            static std::vector<std::string> seq; static size_t si = 0; static int wait = 0; static bool init = false;
+            if (!init) { init = true; if (const char* e = getenv("TP_KEYS")) { std::string t; for (const char* c = e;; c++) { if (*c == ' ' || !*c) { if (!t.empty()) seq.push_back(t); t.clear(); if (!*c) break; } else t += *c; } } }
+            if (wait > 0) wait--; else if (si < seq.size()) { char c = seq[si++][0]; int b = -1; switch (c) { case 'w': wait = 60; break; case 'W': wait = 10; break; case 'u': b = B_UP; break; case 'd': b = B_DOWN; break; case 'l': b = B_LEFT; break; case 'r': b = B_RIGHT; break; case 'a': b = B_A; break; case 'b': b = B_B; break; case 'x': b = B_X; break; case 'p': b = B_PLUS; break; }
+                if (b >= 0) { cur[0][b] = true; wait = 2; } }
+        }
+#endif
         for (int sl = 0; sl < game::MAX_PLAYERS; sl++) for (int b = 0; b < B_COUNT; b++) { if (padsFresh) pads[sl].down[b] = cur[sl][b]; else pads[sl].set(b, cur[sl][b]); }
         padsFresh = false;
     };
@@ -356,7 +373,7 @@ int realMain(int argc, char** argv) {
         } else if (scene == Scene::Menu) {
             menu::Input mi; mi.up = pad.pressed[B_UP]; mi.down = pad.pressed[B_DOWN]; mi.left = pad.pressed[B_LEFT]; mi.right = pad.pressed[B_RIGHT]; mi.a = pad.pressed[B_A]; mi.b = pad.pressed[B_B]; mi.x = pad.pressed[B_X]; mi.plus = pad.pressed[B_PLUS];
             MN.joyCount = (int)joyIds.size(); MN.update(dt, mi); MN.draw();
-            if (MN.startMode >= 0) { int m = MN.startMode == 25 ? 10 : MN.startMode;  /* el 27 (VS 6) conserva su id */ MN.vsCfg.autoHandicap = MN.startMode == 25; for (int& r : vsRating) r = 0; loadRules(m); startGame(); }  // modo 0x19 (VS auto-hándicap) = 10 con auto-hándicap
+            if (MN.startMode >= 0) { int m = MN.startMode == 25 ? 10 : MN.startMode;  /* el 27 (VS AUTO 5-8) conserva su id */ MN.vsCfg.autoHandicap = MN.startMode == 25 || MN.startMode == 27; for (int& r : vsRating) r = 0; loadRules(m); startGame(); }  // modo 0x19 (VS auto-hándicap) = 10 con auto-hándicap
             else if (MN.backToTitle) { scene = Scene::Title; SND.playBgm(snd::BGM_TITLE); }
         } else {
             // PAUSA: entrada de menú de cualquier mando, apertura y paso del menú de pausa

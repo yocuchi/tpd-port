@@ -35,7 +35,7 @@ struct Settings {
     static uint32_t allItemsMask() { static const int B[13] = {0, 1, 2, 3, 4, 5, 7, 8, 9, 11, 17, 14, 15}; uint32_t k = 0; for (int b : B) k |= 1u << b; return k; }
     uint32_t itemMask = 0;
     Settings() { m[1].map = true; /* vs IA: "Mapa" ON por defecto (DAT_804e20a0[1] = 1) */ }
-    ModeSettings& of(int mode) { if (mode == 27 || mode == 28) mode = 10; return m[mode >= 0 && mode < MODES ? mode : 0]; }  // 27 (Tetris VS 6) comparte los ajustes del 10
+    ModeSettings& of(int mode) { if (mode == 27) mode = 10; return m[mode >= 0 && mode < MODES ? mode : 0]; }  // 27 (Tetris VS AUTO 5-8) comparte los ajustes del 10
 
     // ---- Qué ajustes muestra cada modo (máscara de bits de FUN_80195a70, en orden de pantalla) ----
     static uint32_t maskOf(int mode) {
@@ -45,7 +45,7 @@ struct Settings {
         case 1: k |= (1u << S_AILEVEL) | (1u << S_PENALTY) | (1u << S_MAP); break;
         case 5: k |= (1u << S_ENDLESS) | (1u << S_STARTLEVEL) | (1u << S_TETRIMINOS); break;
         case 8: k |= (1u << S_ENDLESS) | (1u << S_STARTLEVEL); k &= ~(1u << S_GHOST); break;  // Maestro: sin Ghost
-        case 10: case 25: case 27: case 28: k |= (1u << S_AILEVEL) | (1u << S_ITEMS) | (1u << S_PENALTY) | (1u << S_MAP); break;  // Tetris VS
+        case 10: case 25: case 27: k |= (1u << S_AILEVEL) | (1u << S_ITEMS) | (1u << S_PENALTY) | (1u << S_MAP); break;  // Tetris VS
         default: break;  // 6 All Clear Sprint, 7 Sprint y el resto: solo las comunes [modos 2/3/4/9 tienen ajustes propios sin implementar]
         }
         return k;

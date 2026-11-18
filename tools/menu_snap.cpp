@@ -1,4 +1,6 @@
 // Simula el menú y captura: menu_snap salida.bmp "secuencia"  (secuencia: letras separadas por espacios: w=esperar 60 frames, W=esperar 10, u/d/l/r/a/b/x=botón X, Ajustes)
+//   Selector de jugadores del modo 27 (TETRIS VS AUTO 5-8): "w d d a w l W w a w a w a w" (menú multijugador, 27 = último icono, A = reglas, A, A = no ver reglas); luego r/l cambian N, a confirma, b vuelve.
+//   MENU_JOYS=n  nº de mandos simulados (valor inicial del selector = clamp(n, 5, 8))
 #include "../gfx/menu.hpp"
 #include <fstream>
 static std::vector<uint8_t> readFile(const std::string& p) { std::ifstream f(p, std::ios::binary); return std::vector<uint8_t>((std::istreambuf_iterator<char>(f)), {}); }
@@ -11,6 +13,7 @@ int main(int argc, char** argv) {
     msg::Catalog M; M.dir = "assets_src/mess/";
     menu::MenuSystem S; if (!S.load(&R, &M, "assets_src/")) { fprintf(stderr, "no carga\n"); return 1; }
     game::Settings AJ; S.cfg = &AJ;  // AJUSTES: ajustes en memoria (no toca el fichero del usuario)
+    if (getenv("MENU_JOYS")) S.joyCount = atoi(getenv("MENU_JOYS"));
     S.open();
     std::string seq = argc > 2 ? argv[2] : "w";
     for (char c : seq) {

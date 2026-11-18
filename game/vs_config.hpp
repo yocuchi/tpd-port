@@ -4,7 +4,7 @@
 
 namespace game {
 
-constexpr int MAX_PLAYERS = 8;  // Tetris VS 6/8 (modos 27/28): 6/8 jugadores locales; los modos 10/25 siguen usando 2-4
+constexpr int MAX_PLAYERS = 8;  // Tetris VS AUTO 5-8 (modo 27): 5..8 jugadores locales; los modos 10/25 siguen usando 2-4
 
 enum VsType { VT_OFF = 0, VT_HUMAN = 1 /* PER */, VT_GUEST = 2 /* INVITADO */, VT_CPU = 3 /* IA */ };
 
